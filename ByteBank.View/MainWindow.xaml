@@ -20,13 +20,14 @@
 
         <Grid DockPanel.Dock="Bottom">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="52*"/>
+                <ColumnDefinition Width="197*"/>
+                <ColumnDefinition Width="248*"/>
             </Grid.ColumnDefinitions>
 
             <Button Name="BtnProcessar"
                     Padding="10"
-                    Click="BtnProcessar_Click">
+                    Click="BtnProcessar_Click" Grid.ColumnSpan="2">
                 Fazer Processamento
             </Button>
 
@@ -39,9 +40,9 @@
             </Button>
 
         </Grid>
-        
-        
-        
+
+
+
         <!-- Resultado -->
         <TextBlock DockPanel.Dock="Top">Resultado:</TextBlock>
         <TextBlock DockPanel.Dock="Top"

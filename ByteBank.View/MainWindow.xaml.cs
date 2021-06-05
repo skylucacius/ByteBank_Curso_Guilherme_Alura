@@ -1,6 +1,7 @@
 ﻿using ByteBank.Core.Model;
 using ByteBank.Core.Repository;
 using ByteBank.Core.Service;
+using ByteBank.View.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +24,7 @@ namespace ByteBank.View
     {
         private readonly ContaClienteRepository r_Repositorio;
         private readonly ContaClienteService r_Servico;
+        private CancellationTokenSource _cts;
 
         public MainWindow()
         {
@@ -35,24 +37,56 @@ namespace ByteBank.View
         private async void BtnProcessar_Click(object sender, RoutedEventArgs e)
         {
             BtnProcessar.IsEnabled = false;
+            _cts = new CancellationTokenSource();
 
             var contas = r_Repositorio.GetContaClientes();
-            AtualizarView(new List<string>(), TimeSpan.Zero);
+            LimparView();
+            PgsProgresso.Maximum = contas.Count();
 
             var inicio = DateTime.Now;
-            var resultado = await ConsolidarContas(contas);
-            var fim = DateTime.Now;
+            BtnCancelar.IsEnabled = true;
 
-            AtualizarView(resultado, fim - inicio);
+            var progress = new Progress<string>(str => PgsProgresso.Value++);
+            //var progress = new ByteBankProgress<string>(str => PgsProgresso.Value++);
+            try
+            {
+                var resultado = await ConsolidarContas(contas, progress, _cts.Token);
+                var fim = DateTime.Now;
 
-            BtnProcessar.IsEnabled = true;
+                AtualizarView(resultado, fim - inicio);
+            }
+            catch (OperationCanceledException)
+            {
+                TxtTempo.Text = "Operação cancelada pelo usuário";
+            }
+            finally
+            {
+                BtnProcessar.IsEnabled = true;
+                BtnCancelar.IsEnabled = false;
+            }
         }
 
-        private async Task<string[]> ConsolidarContas(IEnumerable<ContaCliente> contas)
+        private async Task<string[]> ConsolidarContas(IEnumerable<ContaCliente> contas, IProgress<String> reportadorDeProgresso, CancellationToken ct)
         {
-            var tasks = contas.Select(conta => Task.Factory.StartNew(() => r_Servico.ConsolidarMovimentacao(conta)));
+            //var SchedulerUI = TaskScheduler.FromCurrentSynchronizationContext();
+
+            var tasks = contas.Select(conta => Task.Factory.StartNew(() => {
+                ct.ThrowIfCancellationRequested();
+                var resultado = r_Servico.ConsolidarMovimentacao(conta, ct);
+                reportadorDeProgresso.Report(resultado);
+                //Task.Factory.StartNew(() => PgsProgresso.Value++,CancellationToken.None,TaskCreationOptions.None, SchedulerUI);
+                ct.ThrowIfCancellationRequested();
+                return resultado;
+            },ct));
 
             return await Task.WhenAll(tasks);
+        }
+
+        private void LimparView()
+        {
+            LstResultados.ItemsSource = null;
+            TxtTempo.Text = null;
+            PgsProgresso.Value = 0;
         }
 
         private void AtualizarView(IEnumerable<String> result, TimeSpan elapsedTime)
@@ -66,7 +100,9 @@ namespace ByteBank.View
 
         private void BtnCancelar_Click(object sender, RoutedEventArgs e)
         {
-
+            BtnCancelar.IsEnabled = false;
+            _cts.Cancel();
+            
         }
     }
 }
